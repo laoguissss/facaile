@@ -1,12 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <link rel="stylesheet" href="css/styles.css">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>薪资计时器</title>
-        /* 新增背景容器 */
+    <style>
+        /* 背景容器样式 */
         #background-container {
+    z-index: -1; /* 确保背景在底层 */
             position: fixed;
             top: 0;
             left: 0;
@@ -14,8 +13,10 @@
             height: 100%;
             z-index: -1;
             background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
-        /* 新增居中布局 */
+        /* 主容器布局 */
         .container {
             display: flex;
             flex-direction: column;
@@ -23,28 +24,30 @@
             justify-content: center;
             height: 100vh;
         }
-        /* 新增按钮样式 */
+        /* 按钮样式 */
         #start-btn {
             padding: 10px 20px;
             margin-left: 10px;
             cursor: pointer;
         }
-        /* 调整数字显示样式 */
+        /* 数字显示样式 */
         #time-display, #money-display {
             font-size: 3em;
             margin: 20px 0;
             text-align: center;
         }
-        /* 新增金币动画样式 */
+        /* 金币动画 */
         @keyframes coinBurst {
-            0% { transform: scale(0); opacity: 1; }
-            100% { transform: scale(3); opacity: 0; }
+            0% { transform: scale(0) rotate(0deg); opacity: 1; }
+            100% { transform: scale(4) rotate(360deg); opacity: 0; }
         }
         .coin-effect {
             animation: coinBurst 1s ease-out;
             position: absolute;
             width: 50px;
+            animation: coinBurst 1s ease-out forwards;
         }
+    </style>
     
 </head>
 <body>
@@ -84,6 +87,106 @@
         <div id="money-display">0.00 <small id="currency-unit">元</small></div>
     </div>
 
-    <script src="js/app.js"></script>
+    <script>
+        // 全局状态管理
+        let isRunning = false;
+        let timer = null;
+        let startTime = 0;
+        let totalEarned = 0;
+        let lastHundred = 0;
+
+        window.addEventListener('DOMContentLoaded', init);
+        function init() {
+            document.getElementById('currency').addEventListener('change', updateCurrencyUnit);
+            
+            const savedBg = localStorage.getItem('background');
+            if(savedBg) {
+                document.getElementById('background-container').style.backgroundImage = `url(${savedBg})`;
+            }
+
+            document.getElementById('bg-upload').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    console.log('保存背景图片数据到本地存储');
+                    localStorage.setItem('background', e.target.result);
+                    console.log('当前存储内容:', localStorage.getItem('background')?.substring(0,50) || '无存储内容');
+                    console.log('背景容器样式:', document.getElementById('background-container').style.backgroundImage);
+                    document.getElementById('background-container').style.backgroundImage = `url(${e.target.result})`;
+                };
+                
+                // 添加错误处理
+                reader.onerror = function(e) {
+                    console.error('文件读取失败:', e.target.error);
+                };
+
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function startTimer() {
+            if (!isRunning) {
+                isRunning = true;
+                startTime = Date.now();
+                totalEarned = 0;
+                lastHundred = 0;
+                timer = setInterval(updateDisplay, 1000);
+                document.getElementById('start-btn').disabled = true;
+            }
+        }
+
+        function updateDisplay() {
+            const currentTime = Date.now();
+            const elapsed = currentTime - startTime;
+            
+            const hours = Math.floor(elapsed / 3600000);
+            const minutes = Math.floor((elapsed % 3600000) / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            document.getElementById('time-display').textContent = 
+                `计时：${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+            const salary = document.getElementById('salary').value || 0;
+            const workdays = Math.max(1, Math.min(31, document.getElementById('workdays').value || 22));
+            const dailyHours = Math.max(1, Math.min(24, document.getElementById('dailyHours').value || 8));
+            const hourly = salary / workdays / dailyHours;
+            const perSecond = hourly / 3600;
+            totalEarned += perSecond;
+
+            // 每满100元触发金币动画
+            if (Math.floor(totalEarned / 100) > Math.floor(lastHundred / 100)) {
+                createCoinEffect();
+                lastHundred = totalEarned;
+            }
+
+            const converted = convertCurrency(totalEarned);
+            document.getElementById('money-display').innerHTML = 
+                `${converted.toFixed(2)} <small id="currency-unit">${document.getElementById('currency').value === 'CNY' ? '元' : '美元'}</small>`;
+        }
+
+        function createCoinEffect() {
+    const coin = document.createElement('div');
+    coin.innerHTML = '🪙';
+    coin.style.cssText = `
+        position: fixed;
+        top: ${window.innerHeight/2}px;
+        left: ${window.innerWidth/2}px;
+        font-size: 40px;
+        pointer-events: none;
+    `;
+    coin.classList.add('coin-effect');
+    document.body.appendChild(coin);
+    
+    coin.addEventListener('animationend', () => {
+        coin.remove();
+    });
+}
+
+function convertCurrency(amount) {
+            const rate = document.getElementById('currency').value === 'CNY' ? 1 : 6.7;
+            return amount * rate;
+        }
+    </script>
 </body>
 </html>
